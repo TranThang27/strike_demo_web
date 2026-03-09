@@ -5,7 +5,8 @@
 #   ./play.sh B_DadDance 4     → 4 envs
 
 CLIP=${1:-B_DadDance}
-NUM_ENVS=${2:-1}
+
+NUM_ENVS=${2:-1}  #modify if you want to run with more robot
 
 DATA_DIR="$(cd "$(dirname "$0")/data_motion/$CLIP" && pwd)"
 CKPT="$DATA_DIR/${CLIP}_policy.pt"
@@ -18,7 +19,7 @@ if [ ! -f "$CKPT" ]; then
   exit 1
 fi
 
-echo "▶  Clip     : $CLIP"
+echo " Clip     : $CLIP"
 echo "   Checkpoint: $CKPT"
 echo "   Motion    : $NPZ"
 echo "   Num envs  : $NUM_ENVS"

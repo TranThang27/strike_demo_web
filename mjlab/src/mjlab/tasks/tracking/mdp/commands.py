@@ -506,7 +506,7 @@ class MotionCommand(CommandTerm):
         try:
           new_motion = MotionLoader(selected_path, self.body_indexes, device=self.device)
         except Exception as exc:
-          status_md.content = f"_❌ Motion error: {exc}_"
+          status_md.content = f"_ Motion error: {exc}_"
           return
 
         # Try to find matching .pt policy file next to the .npz

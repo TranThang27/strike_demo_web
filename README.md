@@ -30,6 +30,12 @@ source .venv/bin/activate
 # Play a trained policy
 cd ..
 ./play.sh 
+
+
+#Multi robot
+MOdify play.sh
+
+NUM_ENVS=${2:-1} to NUM_ENVS=${2:-4} #$ robot 
 ```
 
 
