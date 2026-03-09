@@ -277,6 +277,7 @@ class ViserMujocoScene(DebugVisualizer):
     camera_elevation: float = 30.0,
     show_debug_viz_control: bool = True,
     debug_viz_extra_gui: Callable[[], None] | None = None,
+    show_contacts: bool = True,
   ) -> None:
     """Add standard GUI controls that automatically update this scene's settings.
 
@@ -403,6 +404,8 @@ class ViserMujocoScene(DebugVisualizer):
           debug_viz_extra_gui()
 
     # Contact visualization settings.
+    if not show_contacts:
+      return
     with self.server.gui.add_folder("Contacts"):
       cb_contact_points = self.server.gui.add_checkbox(
         "Points",

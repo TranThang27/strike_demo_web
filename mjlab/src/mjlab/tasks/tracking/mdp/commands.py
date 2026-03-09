@@ -487,12 +487,12 @@ class MotionCommand(CommandTerm):
     )
 
     dropdown = server.gui.add_dropdown(
-      "Motion Clip",
+      "",
       options=labels,
       initial_value=initial_label,
     )
     status_md = server.gui.add_markdown(
-      f"_Loaded: **{initial_label}**_"
+      f"_ {initial_label}_"
     )
 
     @dropdown.on_update
@@ -528,9 +528,9 @@ class MotionCommand(CommandTerm):
         for _ in range(300):  # max 6s
           _t.sleep(0.02)
           if self._pending_motion is None:
-            status_md.content = f"_Loaded: **{selected_label}**_"
+            status_md.content = f"_✅ {selected_label}_"
             return
-        status_md.content = f"_Loaded: **{selected_label}**_"
+        status_md.content = f"_✅ {selected_label}_"
 
       threading.Thread(target=_load_in_bg, daemon=True).start()
 

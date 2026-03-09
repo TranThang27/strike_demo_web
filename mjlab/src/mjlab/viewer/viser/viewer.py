@@ -82,6 +82,9 @@ class ViserPlayViewer(BaseViewer):
     # Background environment (options: apartment, city, dawn, forest, lobby, night, park, studio, sunset, warehouse)
     self._server.scene.configure_environment_map(hdri="forest", background=True, background_blurriness=0.4)
 
+    # Title.
+    self._server.gui.add_markdown("---\n# STRIKE ROBOT\n---")
+
     # Create tab group.
     tabs = self._server.gui.add_tab_group()
 
@@ -93,8 +96,8 @@ class ViserPlayViewer(BaseViewer):
       # Motion clip picker (Commands).
       env = self.env.unwrapped
       if env.command_manager.active_terms:
-        with self._server.gui.add_folder(" Motion Clips"):
-          env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
+        self._server.gui.add_markdown("### Motion Clips")
+        env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
 
       # Playback controls.
       with self._server.gui.add_folder("Playback"):
@@ -154,7 +157,9 @@ class ViserPlayViewer(BaseViewer):
           camera_distance=self.cfg.distance,
           camera_azimuth=self.cfg.azimuth,
           camera_elevation=self.cfg.elevation,
+          show_debug_viz_control=False,
           debug_viz_extra_gui=None,
+          show_contacts=False,
         )
 
       self._camera_overlays = ViserCameraOverlays(self._server, self.env, sim.mj_model)
@@ -165,12 +170,9 @@ class ViserPlayViewer(BaseViewer):
     self._prev_env_idx = self._scene.env_idx
 
     self._term_overlays = ViserTermOverlays(self._server, self.env, self._scene)
-    self._term_overlays.setup_tabs(tabs)
+    # Rewards/Metrics tabs hidden intentionally.
     self._debug_overlays = ViserDebugOverlays(self.env, self._scene)
     self._contact_overlays = ViserContactOverlays(self._scene)
-
-    # Groups tab (geoms and sites).
-    self._scene.create_groups_gui(tabs)
 
   @override
   def _process_actions(self) -> None:
