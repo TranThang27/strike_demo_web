@@ -1,7 +1,4 @@
-"""mjlab play viewer based on Viser with simulation controls.
 
-Adapted from an MJX visualizer by Chung Min Kim: https://github.com/chungmin99/
-"""
 
 from __future__ import annotations
 
@@ -82,6 +79,9 @@ class ViserPlayViewer(BaseViewer):
     self._scene.env_idx = self.cfg.env_idx
     self._scene.debug_visualization_enabled = False
 
+    # Background environment (options: apartment, city, dawn, forest, lobby, night, park, studio, sunset, warehouse)
+    self._server.scene.configure_environment_map(hdri="forest", background=True, background_blurriness=0.4)
+
     # Create tab group.
     tabs = self._server.gui.add_tab_group()
 
@@ -93,11 +93,11 @@ class ViserPlayViewer(BaseViewer):
       # Motion clip picker (Commands).
       env = self.env.unwrapped
       if env.command_manager.active_terms:
-        with self._server.gui.add_folder("🎬 Motion Clips"):
+        with self._server.gui.add_folder(" Motion Clips"):
           env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
 
       # Playback controls.
-      with self._server.gui.add_folder("▶ Playback"):
+      with self._server.gui.add_folder("Playback"):
         # Play/Pause button.
         self._pause_button = self._server.gui.add_button(
           "Play" if self._is_paused else "Pause",

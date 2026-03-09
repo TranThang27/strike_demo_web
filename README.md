@@ -26,7 +26,7 @@ Visualize any policy in MuJoCo simulation:
 ```bash
 cd mjlab
 uv sync
-
+source .venv/bin/activate
 # Play a trained policy
 cd ..
 ./play.sh 
