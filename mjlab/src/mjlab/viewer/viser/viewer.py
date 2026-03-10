@@ -79,6 +79,31 @@ class ViserPlayViewer(BaseViewer):
     self._scene.env_idx = self.cfg.env_idx
     self._scene.debug_visualization_enabled = False
 
+    # ── Lighting ──────────────────────────────────────────────────────────
+    # Disable default lights for full manual control.
+    self._server.scene.configure_default_lights(enabled=False)
+    # Very dim ambient so the scene is dark but not pitch black.
+    self._server.scene.add_light_ambient(
+      "/lights/ambient",
+      color=(180, 200, 255),
+      intensity=0.25,
+    )
+    # Spotlight from above pointing straight down onto the robot.
+    import numpy as _np
+    # wxyz for 90° rotation around X → spotlight faces -Z (down in Z-up frame).
+    _q = (_np.cos(_np.pi / 4), _np.sin(_np.pi / 4), 0.0, 0.0)
+    self._server.scene.add_light_spot(
+      "/lights/spot_main",
+      color=(255, 245, 220),
+      intensity=8.0,
+      angle=0.6,
+      penumbra=0.3,
+      decay=1.0,
+      cast_shadow=True,
+      position=(0.0, 0.0, 5.0),
+      wxyz=_q,
+    )
+
     # Background environment (options: apartment, city, dawn, forest, lobby, night, park, studio, sunset, warehouse)
     self._server.scene.configure_environment_map(hdri="forest", background=True, background_blurriness=0.4)
 

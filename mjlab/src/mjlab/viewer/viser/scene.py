@@ -755,15 +755,28 @@ class ViserMujocoScene(DebugVisualizer):
         nonplane_geom_ids: list[int] = []
         for geom_id in all_geoms:
           geom_type = self.mj_model.geom_type[geom_id]
-          # Add plane geoms as infinite grids.
+          # Add plane geoms as solid flat meshes.
           if geom_type == mjtGeom.mjGEOM_PLANE:
             geom_name = mj_id2name(self.mj_model, mjtObj.mjOBJ_GEOM, geom_id)
-            self.server.scene.add_grid(
+            import trimesh as _trimesh
+            # Build a large thin box to represent the solid floor (100m x 100m x 2mm).
+            floor_mesh = _trimesh.creation.box(extents=[100.0, 100.0, 0.002])
+            # Get floor color from model rgba; fall back to light grey.
+            rgba = self.mj_model.geom_rgba[geom_id]
+            if rgba[3] > 0:
+              r, g, b, a = int(rgba[0]*255), int(rgba[1]*255), int(rgba[2]*255), int(rgba[3]*255)
+            else:
+              # Light blue floor
+              r, g, b, a = 120, 190, 230, 255
+            floor_mesh.visual = _trimesh.visual.ColorVisuals(
+              mesh=floor_mesh,
+              vertex_colors=np.array([[r, g, b, a]] * len(floor_mesh.vertices), dtype=np.uint8),
+            )
+            self.server.scene.add_mesh_trimesh(
               f"/fixed_bodies/{body_name}/{geom_name}",
-              infinite_grid=True,
-              fade_distance=50.0,
-              shadow_opacity=0.2,
-              plane_opacity=0.4,
+              floor_mesh,
+              cast_shadow=False,
+              receive_shadow=0.5,
               position=self.mj_model.geom_pos[geom_id],
               wxyz=self.mj_model.geom_quat[geom_id],
             )
