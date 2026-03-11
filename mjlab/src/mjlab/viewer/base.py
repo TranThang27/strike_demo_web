@@ -164,7 +164,7 @@ class BaseViewer(ABC):
     self.cfg = env.cfg.viewer
 
     # State.
-    self._is_paused = False
+    self._is_paused = True
     self._step_count = 0
     self._last_error: str | None = None
 
@@ -396,6 +396,10 @@ class BaseViewer(ABC):
   def run(self, num_steps: Optional[int] = None, catch_sigint: bool = True) -> None:
     self._interrupted = False
     self.setup()
+    self.reset_environment()
+    if hasattr(self.env.unwrapped, "sim"):
+        self.env.unwrapped.sim.forward()
+    self.sync_env_to_viewer()
     now = time.perf_counter()
     self._stats_last_time = now
     self._last_tick_time = now

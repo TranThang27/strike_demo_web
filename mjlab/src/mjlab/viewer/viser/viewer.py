@@ -108,126 +108,198 @@ class ViserPlayViewer(BaseViewer):
     self._server.scene.configure_environment_map(hdri="forest", background=True, background_blurriness=0.4)
 
     # Title.
-    self._server.gui.add_markdown("---\n# STRIKE ROBOT\n---")
+    self._server.gui.add_markdown(
+        "<div style='text-align: center; margin-top: 5px;'>"
+        "<h1 style='color: #4CAF50; margin: 0;'>🤖 STRIKE ROBOT</h1>"
+        "<p style='color: #888; font-size: 14px; margin: 5px 0 15px 0;'>Interactive Physics & Motion Editor</p>"
+        "</div>"
+    )
 
     # Create tab group.
     tabs = self._server.gui.add_tab_group()
 
     # Main tab with simulation controls and display settings.
-    with tabs.add_tab("Controls", icon=viser.Icon.SETTINGS):
-      # Status display.
+    with tabs.add_tab("Dashboard", icon=viser.Icon.DASHBOARD):
       self._status_html = self._server.gui.add_html("")
 
-      # Motion clip picker (Commands).
-      env = self.env.unwrapped
-      if env.command_manager.active_terms:
-        self._server.gui.add_markdown("### Motion Clips")
+      # Playback controls.
+      self._server.gui.add_markdown("### 🎬 Playback Controls")
+      self._pause_button = self._server.gui.add_button(
+        "Play" if self._is_paused else "Pause",
+        icon=viser.Icon.PLAYER_PLAY if self._is_paused else viser.Icon.PLAYER_PAUSE,
+      )
+
+      @self._pause_button.on_click
+      def _(_) -> None:
+        self.request_toggle_pause()
+
+      reset_button = self._server.gui.add_button(
+        "Reset Environment", icon=viser.Icon.REFRESH,
+      )
+
+      @reset_button.on_click
+      def _(_) -> None:
+        self.request_reset()
+
+      speed_buttons = self._server.gui.add_button_group(
+        "Speed",
+        options=["Slower", "1x", "Faster"],
+      )
+
+      @speed_buttons.on_click
+      def _(event) -> None:
+        if event.target.value == "Slower":
+          self.request_speed_down()
+        elif event.target.value == "1x":
+          self.request_reset_speed()
+        else:
+          self.request_speed_up()
+
+      # Video capture.
+      self._server.gui.add_markdown("### 📹 Video Capture")
+      self._is_recording = False
+      self._record_frames = []
+      self._record_button = self._server.gui.add_button(
+        "Record Video", icon=viser.Icon.VIDEO,
+      )
+
+      @self._record_button.on_click
+      def _(event) -> None:
+        if not self._is_recording:
+            self._is_recording = True
+            self._record_frames = []
+            self._initialize_renderer_request = True
+            event.target.label = "Stop Recording"
+            event.target.color = "red"
+        else:
+            self._is_recording = False
+            event.target.label = "Saving..."
+            event.target.disabled = True
+            
+            def save_video(frames, target):
+                import time
+                from pathlib import Path
+                import mediapy as media
+                import numpy as np
+                
+                if frames:
+                    video_frames = []
+                    for frame in frames:
+                        frame = np.asarray(frame) if not isinstance(frame, np.ndarray) else frame
+                        if frame.dtype != np.uint8:
+                            frame = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
+                        video_frames.append(frame)
+                        
+                    out_dir = Path("/home/acer/strike_demo_web/record_video")
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    timestamp = int(time.time())
+                    out_path = out_dir / f"recording_{timestamp}.mp4"
+                    media.write_video(str(out_path), video_frames, fps=60)
+                    print(f"\\n[INFO] Saved video to {out_path.absolute()}")
+                
+                target.label = "Record Video"
+                target.icon = viser.Icon.VIDEO
+                target.color = None
+                target.disabled = False
+                
+            import threading
+            threading.Thread(target=save_video, args=(self._record_frames, event.target)).start()
+
+    # Motion clips.
+    env = self.env.unwrapped
+    if env.command_manager.active_terms:
+      with tabs.add_tab("Motions", icon=viser.Icon.MOVIE):
+        self._server.gui.add_markdown("### Available Motion Clips")
+        self._server.gui.add_markdown("_Select a reference trajectory clip for the policy._")
         env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
 
-      # Playback controls.
-      with self._server.gui.add_folder("Playback"):
-        # Play/Pause button.
-        self._pause_button = self._server.gui.add_button(
-          "Play" if self._is_paused else "Pause",
-          icon=viser.Icon.PLAYER_PLAY if self._is_paused else viser.Icon.PLAYER_PAUSE,
-        )
+        # Inject policy hot-swap callbacks into any MotionCommand terms.
+        if self._runner is not None:
+          from mjlab.tasks.tracking.mdp.commands import MotionCommand as _MC
+          for term in env.command_manager._terms.values():
+            if isinstance(term, _MC):
+              _runner = self._runner
+              _viewer = self
+              def _make_load_fn(r, v):
+                def _load(pt_path: str):
+                  r.load(pt_path, load_cfg={"actor": True},
+                         strict=True, map_location=r.device)
+                  return r.get_inference_policy(device=r.device)
+                return _load
+              term._load_policy_fn = _make_load_fn(_runner, _viewer)
+              term._set_policy_fn  = lambda p: setattr(_viewer, "policy", p)
 
-        @self._pause_button.on_click
-        def _(_) -> None:
-          self.request_toggle_pause()
+    # Interactive Joints.
+    with tabs.add_tab("Pose", icon=viser.Icon.TOOL):
+      self._server.gui.add_markdown("### Interactive Pose Editor")
+      self._server.gui.add_markdown("_Pause the simulation to edit joint positions manually._")
+      
+      if hasattr(self.env.unwrapped, "scene") and "robot" in self.env.unwrapped.scene.entities:
+          robot = self.env.unwrapped.scene["robot"]
+          
+          lower_limits = robot.data.soft_joint_pos_limits[0, :, 0].cpu().numpy()
+          upper_limits = robot.data.soft_joint_pos_limits[0, :, 1].cpu().numpy()
+          
+          self._joint_sliders = []
+          import numpy as np
+          import torch
+          initial_qpos = robot.data.joint_pos[0].clone()
 
-        # Record button.
-        self._is_recording = False
-        self._record_frames = []
-        self._record_button = self._server.gui.add_button(
-          "Record Video", icon=viser.Icon.VIDEO,
-        )
+          reset_pose_btn = self._server.gui.add_button("Reset to Zero Pose", icon=viser.Icon.REFRESH)
+          
+          @reset_pose_btn.on_click
+          def _(_):
+              if self._is_paused:
+                  for i, s in enumerate(self._joint_sliders):
+                      zero_val = float(np.clip(0.0, float(lower_limits[i]), float(upper_limits[i])))
+                      s.value = zero_val
+          
+          with self._server.gui.add_folder("Joint Sliders"):
+            for i, joint_name in enumerate(robot.joint_names):
+                current_val = float(np.clip(0.0, float(lower_limits[i]), float(upper_limits[i])))
+                initial_qpos[i] = current_val
 
-        @self._record_button.on_click
-        def _(event) -> None:
-          if not self._is_recording:
-              self._is_recording = True
-              self._record_frames = []
-              # Request initialization of offline renderer on the next sim tick
-              self._initialize_renderer_request = True
-              event.target.label = "Stop Recording"
-          else:
-              self._is_recording = False
-              event.target.label = "Saving..."
-              event.target.disabled = True
+                slider = self._server.gui.add_slider(
+                    label=joint_name,
+                    min=float(lower_limits[i]),
+                    max=float(upper_limits[i]),
+                    step=0.01,
+                    initial_value=current_val
+                )
+                
+                def make_callback(idx=i, s=slider):
+                    @s.on_update
+                    def _(_) -> None:
+                        if self._is_paused:
+                            import torch
+                            current_qpos = robot.data.joint_pos[0].clone()
+                            current_qpos[idx] = s.value
+                            robot.write_joint_state_to_sim(
+                                current_qpos.unsqueeze(0),
+                                robot.data.joint_vel[[0]],
+                                env_ids=torch.tensor([0], device=self.env.device)
+                            )
+                            sim = self.env.unwrapped.sim
+                            sim.forward()
+                            self._scene.needs_update = True
+                            
+                make_callback()
+                self._joint_sliders.append(slider)
               
-              def save_video(frames, target):
-                  import time
-                  from pathlib import Path
-                  import mediapy as media
-                  import numpy as np
-                  
-                  if frames:
-                      video_frames = []
-                      for frame in frames:
-                          frame = np.asarray(frame) if not isinstance(frame, np.ndarray) else frame
-                          if frame.dtype != np.uint8:
-                              frame = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
-                          video_frames.append(frame)
-                          
-                      out_dir = Path("/home/acer/strike_demo_web/record_video")
-                      out_dir.mkdir(parents=True, exist_ok=True)
-                      timestamp = int(time.time())
-                      out_path = out_dir / f"recording_{timestamp}.mp4"
-                      media.write_video(str(out_path), video_frames, fps=60)
-                      print(f"\\n[INFO] Saved video to {out_path.absolute()}")
-                  
-                  # Restore button state
-                  target.label = "Record Video"
-                  target.icon = viser.Icon.VIDEO
-                  target.color = None
-                  target.disabled = False
-                  
-              import threading
-              threading.Thread(target=save_video, args=(self._record_frames, event.target)).start()
+          robot.write_joint_state_to_sim(
+              initial_qpos.unsqueeze(0),
+              robot.data.joint_vel[[0]],
+              env_ids=torch.tensor([0], device=self.env.device)
+          )
+          sim = self.env.unwrapped.sim
+          sim.forward()
+          self._scene.needs_update = True
+      else:
+          self._server.gui.add_markdown("_Robot entity not found for joint controls._")
 
-        # Reset button.
-        reset_button = self._server.gui.add_button(
-          "Reset", icon=viser.Icon.REFRESH,
-        )
-
-        @reset_button.on_click
-        def _(_) -> None:
-          self.request_reset()
-
-        # Speed controls.
-        speed_buttons = self._server.gui.add_button_group(
-          "Speed",
-          options=["Slower", "1x", "Faster"],
-        )
-
-        @speed_buttons.on_click
-        def _(event) -> None:
-          if event.target.value == "Slower":
-            self.request_speed_down()
-          elif event.target.value == "1x":
-            self.request_reset_speed()
-          else:
-            self.request_speed_up()
-
-      # Inject policy hot-swap callbacks into any MotionCommand terms.
-      if self._runner is not None:
-        from mjlab.tasks.tracking.mdp.commands import MotionCommand as _MC
-        for term in env.command_manager._terms.values():
-          if isinstance(term, _MC):
-            _runner = self._runner
-            _viewer = self
-            def _make_load_fn(r, v):
-              def _load(pt_path: str):
-                r.load(pt_path, load_cfg={"actor": True},
-                       strict=True, map_location=r.device)
-                return r.get_inference_policy(device=r.device)
-              return _load
-            term._load_policy_fn = _make_load_fn(_runner, _viewer)
-            term._set_policy_fn  = lambda p: setattr(_viewer, "policy", p)
-
-      # Scene / camera controls (no debug viz).
-      with self._server.gui.add_folder("Scene"):
+    # Scene & Camera Controls.
+    with tabs.add_tab("Render", icon=viser.Icon.CAMERA):
+      with self._server.gui.add_folder("Scene Settings"):
         self._scene.create_visualization_gui(
           camera_distance=self.cfg.distance,
           camera_azimuth=self.cfg.azimuth,
