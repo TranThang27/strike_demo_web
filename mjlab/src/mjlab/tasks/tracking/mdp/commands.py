@@ -445,8 +445,17 @@ class MotionCommand(CommandTerm):
     current_file = Path(self.cfg.motion_file)
     # Walk up to find a meaningful root (folder named data_motion, or 2 levels up).
     for parent in [current_file.parent, current_file.parent.parent]:
-      if parent.name in ("data_motion", "training") or parent == current_file.parent:
+      if parent.name in ("data_motion", "training"):
         search_roots.append(parent.parent if parent.name == "training" else parent)
+        break
+      else:
+        # Fallback to traversing upwards
+        current = current_file.parent
+        while current and current != current.parent:
+            if (current / "data_motion").is_dir():
+                search_roots.append(current / "data_motion")
+                break
+            current = current.parent
         break
 
     # Also try well-known absolute path.

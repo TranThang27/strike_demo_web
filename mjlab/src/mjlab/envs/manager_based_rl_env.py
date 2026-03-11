@@ -424,9 +424,8 @@ class ManagerBasedRlEnv:
     elif self.render_mode == "rgb_array":
       if self._offline_renderer is None:
         raise ValueError("Offline renderer not initialized")
-      debug_callback = (
-        self.update_visualizers if hasattr(self, "update_visualizers") else None
-      )
+      # Disable debug drawing when returning RGB image arrays (e.g. for video recording)
+      debug_callback = None
       self._offline_renderer.update(self.sim.data, debug_vis_callback=debug_callback)
       return self._offline_renderer.render()
     else:

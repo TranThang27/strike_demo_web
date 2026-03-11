@@ -136,6 +136,56 @@ class ViserPlayViewer(BaseViewer):
         def _(_) -> None:
           self.request_toggle_pause()
 
+        # Record button.
+        self._is_recording = False
+        self._record_frames = []
+        self._record_button = self._server.gui.add_button(
+          "Record Video", icon=viser.Icon.VIDEO,
+        )
+
+        @self._record_button.on_click
+        def _(event) -> None:
+          if not self._is_recording:
+              self._is_recording = True
+              self._record_frames = []
+              # Request initialization of offline renderer on the next sim tick
+              self._initialize_renderer_request = True
+              event.target.label = "Stop Recording"
+          else:
+              self._is_recording = False
+              event.target.label = "Saving..."
+              event.target.disabled = True
+              
+              def save_video(frames, target):
+                  import time
+                  from pathlib import Path
+                  import mediapy as media
+                  import numpy as np
+                  
+                  if frames:
+                      video_frames = []
+                      for frame in frames:
+                          frame = np.asarray(frame) if not isinstance(frame, np.ndarray) else frame
+                          if frame.dtype != np.uint8:
+                              frame = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
+                          video_frames.append(frame)
+                          
+                      out_dir = Path("/home/acer/strike_demo_web/record_video")
+                      out_dir.mkdir(parents=True, exist_ok=True)
+                      timestamp = int(time.time())
+                      out_path = out_dir / f"recording_{timestamp}.mp4"
+                      media.write_video(str(out_path), video_frames, fps=60)
+                      print(f"\\n[INFO] Saved video to {out_path.absolute()}")
+                  
+                  # Restore button state
+                  target.label = "Record Video"
+                  target.icon = viser.Icon.VIDEO
+                  target.color = None
+                  target.disabled = False
+                  
+              import threading
+              threading.Thread(target=save_video, args=(self._record_frames, event.target)).start()
+
         # Reset button.
         reset_button = self._server.gui.add_button(
           "Reset", icon=viser.Icon.REFRESH,
@@ -333,6 +383,29 @@ class ViserPlayViewer(BaseViewer):
     # Queue debug visualizers only when a scene update will actually be
     # submitted.  Clearing the queues on skipped ticks creates a race
     # with the background thread that causes debug overlays to blink.
+    if getattr(self, "_initialize_renderer_request", False):
+        self._initialize_renderer_request = False
+        env_unwrapped = self.env.unwrapped
+        if getattr(env_unwrapped, "_offline_renderer", None) is None:
+            from mjlab.viewer.offscreen_renderer import OffscreenRenderer
+            sim = env_unwrapped.sim
+            # Force 1080p configuration for the video recording
+            env_unwrapped.cfg.viewer.width = 1920
+            env_unwrapped.cfg.viewer.height = 1080
+            renderer = OffscreenRenderer(
+                model=sim.mj_model, cfg=env_unwrapped.cfg.viewer, scene=env_unwrapped.scene
+            )
+            renderer.initialize()
+            env_unwrapped._offline_renderer = renderer
+            env_unwrapped.render_mode = "rgb_array"
+
+    if getattr(self, "_is_recording", False) and not self._is_paused:
+        frame = self.env.unwrapped.render()
+        if frame is not None:
+            import numpy as np
+            rgb_frame = frame[0] if isinstance(frame, np.ndarray) and frame.ndim == 4 else frame
+            self._record_frames.append(rgb_frame)
+
     will_submit = self._should_submit_scene_update(
       self._counter, self._is_paused, has_pending_updates
     )

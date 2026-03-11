@@ -15,6 +15,7 @@ DATASET_CARD.md
 # HuggingFace Space
 space/
 
+record_video/
 # Local dev artifacts
 .cache/
 .playwright-mcp/
