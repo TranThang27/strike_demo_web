@@ -123,7 +123,7 @@ class ViserPlayViewer(BaseViewer):
       self._status_html = self._server.gui.add_html("")
 
       # Playback controls.
-      self._server.gui.add_markdown("### 🎬 Playback Controls")
+      self._server.gui.add_markdown("### Playback Controls")
       self._pause_button = self._server.gui.add_button(
         "Play" if self._is_paused else "Pause",
         icon=viser.Icon.PLAYER_PLAY if self._is_paused else viser.Icon.PLAYER_PAUSE,
@@ -155,8 +155,31 @@ class ViserPlayViewer(BaseViewer):
         else:
           self.request_speed_up()
 
+      # Motion clips.
+      env = self.env.unwrapped
+      if env.command_manager.active_terms:
+          self._server.gui.add_markdown("### Available Motion Clips")
+          self._server.gui.add_markdown("_Select a reference trajectory clip for the policy._")
+          env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
+
+          # Inject policy hot-swap callbacks into any MotionCommand terms.
+          if self._runner is not None:
+            from mjlab.tasks.tracking.mdp.commands import MotionCommand as _MC
+            for term in env.command_manager._terms.values():
+              if isinstance(term, _MC):
+                _runner = self._runner
+                _viewer = self
+                def _make_load_fn(r, v):
+                  def _load(pt_path: str):
+                    r.load(pt_path, load_cfg={"actor": True},
+                           strict=True, map_location=r.device)
+                    return r.get_inference_policy(device=r.device)
+                  return _load
+                term._load_policy_fn = _make_load_fn(_runner, _viewer)
+                term._set_policy_fn  = lambda p: setattr(_viewer, "policy", p)
+
       # Video capture.
-      self._server.gui.add_markdown("### 📹 Video Capture")
+      self._server.gui.add_markdown("### Video Capture")
       self._is_recording = False
       self._record_frames = []
       self._record_button = self._server.gui.add_button(
@@ -205,29 +228,22 @@ class ViserPlayViewer(BaseViewer):
             import threading
             threading.Thread(target=save_video, args=(self._record_frames, event.target)).start()
 
-    # Motion clips.
-    env = self.env.unwrapped
-    if env.command_manager.active_terms:
-      with tabs.add_tab("Motions", icon=viser.Icon.MOVIE):
-        self._server.gui.add_markdown("### Available Motion Clips")
-        self._server.gui.add_markdown("_Select a reference trajectory clip for the policy._")
-        env.command_manager.create_gui(self._server, lambda: self._scene.env_idx)
+      # Scene & Camera Controls.
+      self._server.gui.add_markdown("### Camera Settings")
+      with self._server.gui.add_folder("Scene Settings"):
+        self._scene.create_visualization_gui(
+          camera_distance=self.cfg.distance,
+          camera_azimuth=self.cfg.azimuth,
+          camera_elevation=self.cfg.elevation,
+          show_debug_viz_control=False,
+          debug_viz_extra_gui=None,
+          show_contacts=False,
+        )
 
-        # Inject policy hot-swap callbacks into any MotionCommand terms.
-        if self._runner is not None:
-          from mjlab.tasks.tracking.mdp.commands import MotionCommand as _MC
-          for term in env.command_manager._terms.values():
-            if isinstance(term, _MC):
-              _runner = self._runner
-              _viewer = self
-              def _make_load_fn(r, v):
-                def _load(pt_path: str):
-                  r.load(pt_path, load_cfg={"actor": True},
-                         strict=True, map_location=r.device)
-                  return r.get_inference_policy(device=r.device)
-                return _load
-              term._load_policy_fn = _make_load_fn(_runner, _viewer)
-              term._set_policy_fn  = lambda p: setattr(_viewer, "policy", p)
+      self._camera_overlays = ViserCameraOverlays(self._server, self.env, sim.mj_model)
+      if self._camera_overlays.has_cameras:
+        with self._server.gui.add_folder("Camera Feeds"):
+          self._camera_overlays.setup_controls()
 
     # Interactive Joints.
     with tabs.add_tab("Pose", icon=viser.Icon.TOOL):
@@ -296,23 +312,6 @@ class ViserPlayViewer(BaseViewer):
           self._scene.needs_update = True
       else:
           self._server.gui.add_markdown("_Robot entity not found for joint controls._")
-
-    # Scene & Camera Controls.
-    with tabs.add_tab("Render", icon=viser.Icon.CAMERA):
-      with self._server.gui.add_folder("Scene Settings"):
-        self._scene.create_visualization_gui(
-          camera_distance=self.cfg.distance,
-          camera_azimuth=self.cfg.azimuth,
-          camera_elevation=self.cfg.elevation,
-          show_debug_viz_control=False,
-          debug_viz_extra_gui=None,
-          show_contacts=False,
-        )
-
-      self._camera_overlays = ViserCameraOverlays(self._server, self.env, sim.mj_model)
-      if self._camera_overlays.has_cameras:
-        with self._server.gui.add_folder("Camera Feeds"):
-          self._camera_overlays.setup_controls()
 
     self._prev_env_idx = self._scene.env_idx
 
@@ -461,9 +460,9 @@ class ViserPlayViewer(BaseViewer):
         if getattr(env_unwrapped, "_offline_renderer", None) is None:
             from mjlab.viewer.offscreen_renderer import OffscreenRenderer
             sim = env_unwrapped.sim
-            # Force 1080p configuration for the video recording
-            env_unwrapped.cfg.viewer.width = 1920
-            env_unwrapped.cfg.viewer.height = 1080
+            # Force 720p configuration for the video recording
+            env_unwrapped.cfg.viewer.width = 1280
+            env_unwrapped.cfg.viewer.height = 720
             renderer = OffscreenRenderer(
                 model=sim.mj_model, cfg=env_unwrapped.cfg.viewer, scene=env_unwrapped.scene
             )
