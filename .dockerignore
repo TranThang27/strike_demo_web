@@ -1,0 +1,32 @@
+# Large runtime directories
+mjlab/.venv/
+mjlab/logs/
+mjlab/wandb/
+mjlab/artifacts/
+mjlab/benchmark_results/
+mjlab/dist/
+record_video/
+
+# Build/cache
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.uv-cache/
+*.egg-info/
+
+# Git/CI
+.git/
+.github/
+
+# IDE/local
+.vscode/
+mjlab/notebooks/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Docs build artifacts
+mjlab/docs/source/_build/
+mjlab/docs/source/generated/
