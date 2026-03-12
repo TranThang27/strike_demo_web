@@ -57,7 +57,7 @@ class ViserPlayViewer(BaseViewer):
     self._scene_update_last_ms: float = 0.0
     self._timing_last_log_time: float = 0.0
     self._external_server = viser_server is not None
-    self._server = viser_server or viser.ViserServer(label="mjlab")
+    self._server = viser_server or viser.ViserServer(host="0.0.0.0", label="mjlab")
 
   @override
   def setup(self) -> None:

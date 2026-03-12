@@ -19,7 +19,7 @@ Scripts and documentation for the G1 Moves motion capture dataset — 60 clips f
 ## Deploying Policies
 
 
-### Option 1: Sim2Sim with mjlab (easiest)
+### Option 1: Sim2Sim with mjlab (fastest)
 
 Visualize any policy in MuJoCo simulation:
 
